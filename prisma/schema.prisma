@@ -1,0 +1,196 @@
+// Prisma Schema for CarShop Enterprise
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. User Roles & Management
+enum Role {
+  ADMIN
+  SALES_MANAGER
+  STAFF
+  CUSTOMER
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  fullName      String
+  role          Role           @default(CUSTOMER)
+  department    String?
+  phone         String?
+  avatarUrl     String?
+  isActive      Boolean        @default(true)
+  orders        Order[]        @relation("SalesPersonOrders")
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// 2. Car Inventory & Statuses
+enum CarStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  MAINTENANCE
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  ELECTRIC
+  HYBRID
+}
+
+enum Transmission {
+  AUTOMATIC
+  MANUAL
+}
+
+enum CarBodyType {
+  SEDAN
+  SUV
+  COUPE
+  HATCHBACK
+  CROSSOVER
+  PICKUP
+}
+
+model Car {
+  id           String       @id @default(uuid())
+  vin          String       @unique
+  brand        String
+  model        String
+  year         Int
+  color        String
+  bodyType     CarBodyType
+  fuelType     FuelType
+  transmission Transmission
+  price        Float
+  costPrice    Float
+  status       CarStatus    @default(AVAILABLE)
+  specs        Json         // { engine, horsepower, torque, acceleration, mileage, seatingCapacity }
+  imageUrl     String
+  galleryUrls  String[]     @default([])
+  description  String       @db.Text
+  order        Order?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([brand, bodyType, status, price])
+  @@map("cars")
+}
+
+// 3. Orders & Deal Lifecycle
+enum OrderStatus {
+  PENDING
+  APPROVED
+  DELIVERING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  INSTALLMENT
+  CASH
+  CREDIT_CARD
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  orderCode     String        @unique
+  carId         String        @unique
+  car           Car           @relation(fields: [carId], references: [id], onDelete: Restrict)
+  customerName  String
+  customerPhone String
+  customerEmail String
+  salesPersonId String
+  salesPerson   User          @relation("SalesPersonOrders", fields: [salesPersonId], references: [id], onDelete: Restrict)
+  totalAmount   Float
+  depositAmount Float
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod
+  deliveryDate  DateTime?
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, customerEmail])
+  @@map("orders")
+}
+
+// 4. CRM & Customer Leads
+enum LeadStatus {
+  NEW
+  CONTACTED
+  TEST_DRIVE_SCHEDULED
+  NEGOTIATING
+  WON
+  LOST
+}
+
+model CustomerLead {
+  id                 String     @id @default(uuid())
+  fullName           String
+  phone              String
+  email              String
+  interestedCarBrand String
+  interestedCarModel String
+  budgetRange        String
+  status             LeadStatus @default(NEW)
+  notes              String?    @db.Text
+  assignedStaffName  String
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@map("customer_leads")
+}
+
+// 5. Test Drive Bookings
+model TestDriveBooking {
+  id            String   @id @default(uuid())
+  customerName  String
+  customerPhone String
+  carName       String
+  bookingDate   DateTime
+  status        String   @default("CONFIRMED")
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  @@map("test_drive_bookings")
+}
+
+// 6. Audit & Recent Activities
+model RecentActivity {
+  id          String   @id @default(uuid())
+  type        String
+  title       String
+  description String   @db.Text
+  user        String
+  timestamp   DateTime @default(now())
+
+  @@map("recent_activities")
+}
